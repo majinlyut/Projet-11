@@ -104,7 +104,8 @@ Ce projet implémente un **pipeline de streaming en temps réel** pour :
 ---
 ## 📊 Architecture
 
-![alt text](image.png)
+<img width="960" height="308" alt="image" src="https://github.com/user-attachments/assets/1c2d4783-fb6e-4949-a395-9d7e6674ac7d" />
+
 
 1-Les données sont importées dans la BDD postgresql
 2-Debezium récupère le delta de la base(insertion,modification,supression)
