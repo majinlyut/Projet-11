@@ -1,0 +1,3 @@
+FROM redpandadata/redpanda:v23.3.10
+
+ENTRYPOINT ["rpk", "topic", "create", "sportsdata.public.sport_activities", "--partitions", "1", "--replicas", "1", "--brokers", "redpanda:9092"]

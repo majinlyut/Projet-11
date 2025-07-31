@@ -1,0 +1,19 @@
+FROM debezium/connect:2.6
+
+# 1. Passe en root pour créer /opt/jmx
+USER root
+RUN mkdir -p /opt/jmx
+
+# 2. Copie ton agent et ta conf
+COPY jmx_prometheus_javaagent.jar /opt/jmx/jmx_prometheus_javaagent.jar
+COPY jmx-exporter.yaml          /opt/jmx/jmx-exporter.yaml
+
+# 3. Fige les permissions pour que l’utilisateur Connect puisse y accéder
+RUN chown -R 1001:0 /opt/jmx
+
+# 4. Redescends à l’utilisateur par défaut (UID 1001 dans l’image Debezium)
+USER 1001
+
+# 5. Injecte l’agent et expose le port
+ENV KAFKA_OPTS="-javaagent:/opt/jmx/jmx_prometheus_javaagent.jar=5556:/opt/jmx/jmx-exporter.yaml"
+EXPOSE 5556

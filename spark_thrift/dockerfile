@@ -1,0 +1,18 @@
+FROM bitnami/spark:3.5.0
+
+USER root
+
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+
+# Téléchargez les mêmes versions que spark_bronze/gold
+RUN curl -L https://repo1.maven.org/maven2/io/delta/delta-spark_2.12/3.2.0/delta-spark_2.12-3.2.0.jar \
+    -o /opt/bitnami/spark/jars/delta-spark_2.12-3.2.0.jar && \
+    curl -L https://repo1.maven.org/maven2/io/delta/delta-storage/3.2.0/delta-storage-3.2.0.jar \
+    -o /opt/bitnami/spark/jars/delta-storage-3.2.0.jar
+
+RUN chown 1001:root /opt/bitnami/spark/jars/delta-*.jar
+
+USER 1001
+
+ENTRYPOINT ["/opt/bitnami/scripts/spark/entrypoint.sh"]
+CMD ["/opt/bitnami/spark/sbin/start-thriftserver.sh"]

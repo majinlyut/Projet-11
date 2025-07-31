@@ -1,0 +1,7 @@
+---
+# délai avant de commencer le scraping
+startDelaySeconds: 0
+
+# règles ; ici on prend (presque) tout, à affiner ensuite
+rules:
+  - pattern: "^(?<domain>[^:]+):(?<key>.+)$"

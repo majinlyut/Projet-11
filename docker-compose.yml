@@ -1,0 +1,245 @@
+networks:
+  redpanda_network:
+    driver: bridge
+
+volumes:
+  pg_data:
+  redpanda_data:
+  connect_data:
+  delta_data:
+  prometheus_data:
+  grafana_data:
+    external:
+      name: projet11_grafana_data
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: strava_postgres
+    restart: always
+    environment:
+      POSTGRES_DB: sportsdb
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./init/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./postgresql.conf:/etc/postgresql/postgresql.conf
+    command: ["postgres", "-c", "config_file=/etc/postgresql/postgresql.conf"]
+    networks:
+      - redpanda_network
+
+  redpanda:
+    image: redpandadata/redpanda:v23.3.10
+    container_name: redpanda
+    command:
+      - redpanda
+      - start
+      - --smp=1
+      - --memory=1G
+      - --overprovisioned
+      - --node-id=0
+      - --check=false
+      # internal and external kafka addresses (ton réseau docker + localhost)
+      - --kafka-addr=internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr=internal://redpanda:9092,external://localhost:19092
+      - --rpc-addr=0.0.0.0:33145
+      - --advertise-rpc-addr=redpanda:33145
+      - --unsafe-bypass-fsync
+    ports:
+      - "19092:19092"     # external Kafka port
+      - "8081:8081"       # schema registry
+      - "9644:9644"       # admin api
+    volumes:
+      - redpanda_data:/var/lib/redpanda/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sSf http://localhost:9644/v1/cluster/health_overview || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - redpanda_network
+
+  console:
+    image: redpandadata/console:latest
+    container_name: redpanda_console
+    environment:
+      - KAFKA_BROKERS=redpanda:9092
+    ports:
+      - "8080:8080"
+    networks:
+      - redpanda_network
+    depends_on:
+      - redpanda
+
+  connect:
+    build:
+      context: ./connect
+    container_name: kafka_connect
+    depends_on:
+      redpanda:
+        condition: service_healthy
+      postgres:
+        condition: service_started
+    ports:
+      - "8083:8083"   # REST
+      - "5556:5556"   # metrics JMX
+    environment:
+      - BOOTSTRAP_SERVERS=redpanda:9092
+      - GROUP_ID=cdc-group
+      - CONFIG_STORAGE_TOPIC=connect-configs
+      - OFFSET_STORAGE_TOPIC=connect-offsets
+      - STATUS_STORAGE_TOPIC=connect-status
+      - KEY_CONVERTER=org.apache.kafka.connect.json.JsonConverter
+      - VALUE_CONVERTER=org.apache.kafka.connect.json.JsonConverter
+      - CONNECT_PLUGIN_PATH=/kafka/connect,/usr/share/java
+      - DATABASE_HISTORY_KAFKA_BOOTSTRAP_SERVERS=redpanda:9092
+      # évite les problèmes d'annonce réseau côté Connect REST API
+      - CONNECT_REST_ADVERTISED_HOST_NAME=kafka_connect
+    volumes:
+      - connect_data:/kafka/connect
+
+    networks:
+      - redpanda_network
+  slack:
+    build:
+      context: ./slack  
+    container_name: slack_consumer
+    depends_on:
+    - redpanda
+    - topic_creator
+    networks:
+    - redpanda_network
+    env_file:
+      - .env 
+
+  topic_creator:
+    build:
+      context: ./topic_creator
+    depends_on:
+      - redpanda
+    networks:
+      - redpanda_network
+
+  spark_bronze:
+    container_name: spark_bronze
+    build: ./spark
+    command:
+      - spark-submit
+      - "--conf"
+      - "spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension"
+      - "--conf"
+      - "spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog"
+      - "--packages"
+      - "io.delta:delta-spark_2.12:3.2.0,io.delta:delta-storage:3.2.0,org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,org.apache.commons:commons-pool2:2.11.1"
+      - spark_bronze.py
+    volumes:
+      - ./data:/data:ro
+      - ./config:/config:ro
+      - delta_data:/delta
+      - ./spark/metrics.properties:/opt/bitnami/spark/conf/metrics.properties:ro
+    networks:
+      - redpanda_network
+    depends_on:
+      - redpanda
+    ports:
+      - "4040:4040"
+
+  spark_gold:
+    container_name: spark_gold
+    build: ./spark
+    command:
+      - spark-submit
+      - "--conf"
+      - "spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension"
+      - "--conf"
+      - "spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog"
+      - "--packages"
+      - "io.delta:delta-spark_2.12:3.2.0,io.delta:delta-storage:3.2.0,org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,org.apache.commons:commons-pool2:2.11.1"
+      - spark_gold.py
+    volumes:
+      - ./data:/data:ro
+      - ./config:/config:ro
+      - delta_data:/delta
+      - ./spark/metrics.properties:/opt/bitnami/spark/conf/metrics.properties:ro
+    networks:
+      - redpanda_network
+    depends_on:
+      - redpanda
+    ports:
+      - "4041:4040"
+
+  spark_thrift:
+    container_name: spark_thrift
+    build: 
+      context: ./spark_thrift
+    command: >
+      /opt/bitnami/spark/sbin/start-thriftserver.sh
+        --master local[*]
+        --conf spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension
+        --conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog
+        --conf spark.hadoop.hive.server2.authentication=NOSASL
+        --conf spark.hadoop.hive.server2.transport.mode=binary
+        --conf spark.serializer=org.apache.spark.serializer.KryoSerializer
+        --conf spark.sql.adaptive.enabled=true
+        --conf spark.sql.adaptive.coalescePartitions.enabled=true
+        --conf spark.sql.catalogImplementation=hive
+        --conf spark.delta.logStore.class=org.apache.spark.sql.delta.storage.HDFSLogStore
+        --conf spark.jars=/opt/bitnami/spark/jars/delta-spark_2.12-3.2.0.jar,/opt/bitnami/spark/jars/delta-storage-3.2.0.jar
+    environment:
+      - SPARK_EXTRA_CLASSPATH=/opt/bitnami/spark/jars/delta-spark_2.12-3.2.0.jar:/opt/bitnami/spark/jars/delta-storage-3.2.0.jar
+    volumes:
+      - ./data:/data:ro
+      - ./config:/config:ro
+      - delta_data:/delta
+    networks:
+      - redpanda_network
+    depends_on:
+      - redpanda
+      - spark_bronze
+      - spark_gold
+    ports:
+      - "10000:10000"
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    restart: unless-stopped
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - redpanda_network
+
+  grafana:
+
+    image: grafana/grafana:latest
+    container_name: grafana
+    restart: unless-stopped
+    environment:
+      
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    networks:
+      - redpanda_network
+  postgres_exporter:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: postgres_exporter
+    environment:
+      DATA_SOURCE_NAME: "postgresql://user:password@strava_postgres:5432/sportsdb?sslmode=disable"
+      PG_EXPORTER_AUTO_DISCOVER_DATABASES: "true"
+
+    ports:
+      - "9187:9187"
+    networks:
+      - redpanda_network
+    restart: unless-stopped

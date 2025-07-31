@@ -1,0 +1,9 @@
+prime_sportive:
+  rule: commute_sportif      #  booléen simple
+  percent: 0.05              # 5 % du salaire brut annuel
+bien_etre:
+  min_activities: 15
+  window_days: 365
+distance:
+  max_walk_km: 15
+  max_bike_km: 25

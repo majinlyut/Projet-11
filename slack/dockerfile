@@ -1,0 +1,12 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY slack.py .
+
+RUN pip install confluent-kafka slack-sdk
+
+# On récupère la variable d'environ­nement à l'exécution
+ENV PYTHONUNBUFFERED=1
+
+CMD [ "python" , "slack.py"]
