@@ -1,6 +1,8 @@
 # Sport Data Solution — ETL streaming d’activités sportives
 
-## 🚀 Objectif
+<img width="860" height="535" alt="Slack1" src="https://github.com/user-attachments/assets/94b22edc-a53a-4368-be29-726da278ec1d" />
+
+## 🚀Objectif
 Ce projet implémente un **pipeline de streaming en temps réel** pour :
 - **Ingestion** en continu des événements sportifs (Strava) 
 - **Transformation et enrichissement** via Spark Structured Streaming 
@@ -65,7 +67,7 @@ Ce projet implémente un **pipeline de streaming en temps réel** pour :
 
 
 4. **Démarrer le connecteur Debezium**
-   ```bash
+```bash
    curl -X POST http://localhost:8083/connectors \
   -H "Content-Type: application/json" \
   -d '{
@@ -85,7 +87,6 @@ Ce projet implémente un **pipeline de streaming en temps réel** pour :
       "tombstones.on.delete": "false"
     }
   }'
-
    ```
 
 5. **Démarrer le flux de données**
