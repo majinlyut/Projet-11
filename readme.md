@@ -1,4 +1,4 @@
-# Projet 11 – Pipeline de données **temps réel** (Strava )
+# Sport Data Solution — ETL streaming d’activités sportives
 
 ## 🚀 Objectif
 Ce projet implémente un **pipeline de streaming en temps réel** pour :
