@@ -108,13 +108,13 @@ Ce projet implémente un **pipeline de streaming en temps réel** pour :
 <img width="960" height="308" alt="image" src="https://github.com/user-attachments/assets/1c2d4783-fb6e-4949-a395-9d7e6674ac7d" />
 
 
-1-Les données sont importées dans la BDD postgresql
-2-Debezium récupère le delta de la base(insertion,modification,supression)
-3-Redpanda git comme bus de données temps réel, assurant la mise en file et la diffusion scalable vers les consommateurs 
-4-Le consommateur python publie un message de nouvelle activité sur le canal Slack de l'équipe
-5-Le consommateur spark streaming écrit les données brut dans un deltalake bronze
-6-Un second job Spark tranforme les données et les agrèges avec les données RH puis écrit dans un delta lake Gold
-7-Les données enrichies et fiables sont prêtes à être exploité par Power BI ou exports.
+1-Les données sont importées dans la BDD postgresql  
+2-Debezium récupère le delta de la base(insertion,modification,supression)  
+3-Redpanda git comme bus de données temps réel, assurant la mise en file et la diffusion scalable vers les consommateurs   
+4-Le consommateur python publie un message de nouvelle activité sur le canal Slack de l'équipe  
+5-Le consommateur spark streaming écrit les données brut dans un deltalake bronze  
+6-Un second job Spark tranforme les données et les agrèges avec les données RH puis écrit dans un delta lake Gold  
+7-Les données enrichies et fiables sont prêtes à être exploité par Power BI ou exports.  
 
 ## 📊 Monitoring en temps réel
 - **Prometheus** : `http://localhost:9090`
